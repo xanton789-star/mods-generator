@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fabric Modpack Generator</title>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+<style>
+:root{color-scheme:dark;--bg:#0b1020;--panel:#141c31;--panel2:#1b2741;--line:#2b3958;--text:#edf2ff;--muted:#9eacc8;--green:#7cf0b2;--blue:#8db8ff;--red:#ff8585}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top,#172849 0,#0b1020 55%);color:var(--text);font:15px/1.5 system-ui,Segoe UI,sans-serif}
+main{max-width:1100px;margin:auto;padding:34px 20px 60px}.hero{margin-bottom:24px}.eyebrow{color:var(--green);font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:12px}
+h1{font-size:clamp(30px,5vw,46px);line-height:1.1;margin:8px 0}.sub{color:var(--muted);max-width:720px}
+.panel{background:linear-gradient(145deg,#17223a,#11192b);border:1px solid var(--line);border-radius:18px;padding:20px;margin:18px 0;box-shadow:0 14px 40px #0003}
+h2{font-size:19px;margin:0 0 14px}.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field label{display:block;color:#c7d3eb;font-weight:650;margin-bottom:7px}
+input,select{width:100%;padding:12px 13px;background:#0d1527;border:1px solid #354564;border-radius:10px;color:var(--text);font:inherit;outline:none}input:focus,select:focus{border-color:var(--blue)}
+.hint,.muted{color:var(--muted);font-size:13px}.hint{margin-top:7px}
+button{border:0;border-radius:10px;padding:11px 16px;background:var(--green);color:#092017;font-weight:800;font-size:14px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.secondary{background:#273754;color:var(--text);border:1px solid #405274}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.toolbar input{flex:1;min-width:200px}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:16px}
+.mod{background:#101a2d;border:1px solid var(--line);border-radius:13px;padding:13px;display:flex;gap:12px;min-width:0}
+.mod img{width:48px;height:48px;border-radius:10px;object-fit:cover;background:#263653;flex-shrink:0}
+.modbody{min-width:0;flex:1}.modtitle{font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.desc{color:var(--muted);font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:4px 0 8px}
+.modfoot{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;color:var(--muted)}.modfoot label{display:flex;align-items:center;gap:6px;color:var(--green);font-weight:700}.modfoot input{width:auto}
+.status{padding:12px 14px;border-radius:10px;background:#0d1729;border:1px solid var(--line);color:var(--muted);margin-top:14px;white-space:pre-wrap}
+.status.error{border-color:#75414b;color:#ffb0b0}.status.ok{border-color:#28684f;color:#a5ffd0}
+.selected{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.chip{background:#20324e;border:1px solid #3a5275;border-radius:99px;padding:5px 10px;font-size:12px}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}.small{font-size:12px;color:var(--muted);margin-top:12px}
+@media(max-width:650px){.row{grid-template-columns:1fr}main{padding:24px 14px 44px}.panel{padding:16px}}
+</style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <div class="eyebrow">Modrinth · Fabric</div>
+    <h1>Fabric Modpack Generator</h1>
+    <p class="sub">Cari mod dari Modrinth, pilih yang cocok dengan versi Minecraft dan Fabric Loader kamu, lalu unduh semuanya sebagai satu file <b>mods.zip</b>.</p>
+  </header>
+
+  <section class="panel">
+    <h2>1. Atur versi game</h2>
+    <div class="row">
+      <div class="field">
+        <label for="mc">Versi Minecraft</label>
+        <select id="mc"><option value="">Memuat versi...</option></select>
+        <div class="hint">Hanya versi Minecraft yang tersedia di Modrinth.</div>
+      </div>
+      <div class="field">
+        <label for="loader">Versi Fabric Loader</label>
+        <select id="loader"><option value="">Memuat Fabric Loader...</option></select>
+        <div class="hint">Pilih versi loader yang benar-benar terpasang. Generator juga akan memeriksa syarat versi loader di dalam setiap file mod.</div>
+      </div>
+    </div>
+    <div class="actions"><button id="apply">Terapkan versi</button></div>
+    <div id="setupStatus" class="status">Mengambil daftar versi dari layanan resmi Modrinth dan Fabric...</div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Cari dan pilih mod</h2>
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Cari mod, misalnya Sodium, Iris, Xaero..." aria-label="Cari mod">
+      <button id="searchBtn">Cari mod</button>
+    </div>
+    <div class="hint">Hasil pencarian disaring berdasarkan Minecraft dan Fabric. Saat ZIP dibuat, setiap file JAR diperiksa untuk syarat minimum/maksimum Fabric Loader. Tekan Enter untuk mencari.</div>
+    <div id="results" class="results"></div>
+    <div id="searchStatus" class="status">Pilih versi Minecraft dan Fabric Loader, lalu cari mod.</div>
+    <div class="selected" id="selected"></div>
+    <div class="actions">
+      <button id="download" disabled>Unduh mods.zip (0)</button>
+      <button id="clear" class="secondary">Hapus pilihan</button>
+    </div>
+    <div id="downloadStatus" class="status">Generator akan memilih rilis terbaru yang benar-benar cocok dengan versi Minecraft dan Fabric Loader pilihanmu. Jika rilis terbaru terlalu baru, generator akan mencoba rilis sebelumnya.</div>
+  </section>
+  <p class="small">Catatan: generator ini menggunakan API Modrinth dan Fabric secara langsung. Koneksi internet diperlukan. Mod yang memiliki dependensi wajib mungkin memerlukan mod tambahan; periksa halaman masing-masing mod sebelum bermain. File ZIP tidak memasang mod secara otomatis—sebelum menyalin isinya, kosongkan/pindahkan dulu mod lama dari folder <code>.minecraft/mods</code> agar versi lama tidak ikut terbaca.</p>
+</main>
+<script>
+const API='https://api.modrinth.com/v2';
+const $=id=>document.getElementById(id);
+let chosen=new Map(), activeMc='', activeLoader='', searchTimer=null;
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function status(id,msg,type=''){const el=$(id);el.textContent=msg;el.className='status '+type}
+async function getJSON(url){const r=await fetch(url,{headers:{'User-Agent':'FabricModpackGenerator/1.0 (browser)'}});if(!r.ok)throw new Error(`HTTP ${r.status} saat mengakses layanan`);return r.json()}
+async function init(){
+ try{
+  const [games,loaders]=await Promise.all([
+   getJSON(API+'/tag/game_version'),
+   getJSON('https://meta.fabricmc.net/v2/versions/loader')
+  ]);
+  const stable=games.filter(v=>v.version_type==='release');
+  $('mc').innerHTML=stable.map(v=>`<option value="${esc(v.version)}">${esc(v.version)}</option>`).join('');
+  // Fabric Meta mengurutkan versi terbaru lebih dahulu.
+  $('loader').innerHTML=loaders.slice(0,80).map(v=>`<option value="${esc(v.version)}">${esc(v.version)}</option>`).join('');
+  activeMc=$('mc').value;activeLoader=$('loader').value;
+  status('setupStatus',`Daftar siap. Minecraft ${activeMc} · Fabric Loader ${activeLoader}`,'ok');
+ }catch(e){status('setupStatus','Gagal memuat daftar versi. Periksa koneksi internet lalu muat ulang halaman. Detail: '+e.message,'error')}
+}
+function renderSelected(){
+ $('selected').innerHTML=[...chosen.values()].map(m=>`<span class="chip">${esc(m.title)}</span>`).join('');
+ $('download').disabled=chosen.size===0;
+ $('download').textContent=`Unduh mods.zip (${chosen.size})`;
+}
+function renderMods(items){
+ $('results').innerHTML=items.map(m=>{
+  const checked=chosen.has(m.project_id);
+  return `<article class="mod">
+   <img src="${esc(m.icon_url||'')}" alt="" onerror="this.style.visibility='hidden'">
+   <div class="modbody">
+    <div class="modtitle" title="${esc(m.title)}">${esc(m.title)}</div>
+    <div class="desc">${esc(m.description)}</div>
+    <div class="modfoot"><span>⬇ ${Number(m.downloads||0).toLocaleString('id-ID')} · ${esc(m.author||'')}</span>
+    <label><input type="checkbox" data-id="${esc(m.project_id)}" ${checked?'checked':''}> Pilih</label></div>
+   </div></article>`;
+ }).join('')||'<p class="muted">Tidak ada mod yang cocok. Coba kata kunci lain.</p>';
+ $('results').querySelectorAll('input[type=checkbox]').forEach(box=>box.addEventListener('change',()=>{
+  const m=items.find(x=>x.project_id===box.dataset.id);
+  if(box.checked)chosen.set(m.project_id,m);else chosen.delete(m.project_id);
+  renderSelected();
+ }));
+}
+async function searchMods(){
+ if(!activeMc||!activeLoader){status('searchStatus','Pilih versi Minecraft dan Fabric Loader terlebih dahulu.','error');return}
+ const q=$('search').value.trim();
+ status('searchStatus','Mencari mod dan memeriksa kompatibilitas Fabric...');$('results').innerHTML='';
+ try{
+  const params=new URLSearchParams({query:q,limit:'60',index:'relevance',facets:JSON.stringify([['project_type:mod'],[`versions:${activeMc}`]])});
+  const data=await getJSON(`${API}/search?${params}`);
+  // Periksa versi proyek satu per satu agar hasil benar-benar memiliki build Fabric untuk versi MC yang dipilih.
+  const candidates=data.hits.slice(0,40);
+  const checked=await Promise.all(candidates.map(async m=>{
+   try{
+    const p=await getJSON(`${API}/project/${encodeURIComponent(m.project_id)}/version?game_versions=${encodeURIComponent(JSON.stringify([activeMc]))}&loaders=${encodeURIComponent(JSON.stringify(['fabric']))}`);
+    return p.length?m:null;
+   }catch{return null}
+  }));
+  const compatible=checked.filter(Boolean);
+  renderMods(compatible);
+  status('searchStatus',`${compatible.length} mod cocok dengan Minecraft ${activeMc} dan Fabric. Hasil pencarian: ${data.total} proyek sebelum pemeriksaan loader.`,'ok');
+ }catch(e){status('searchStatus','Pencarian gagal: '+e.message,'error')}
+}
+$('searchBtn').addEventListener('click',searchMods);
+$('search').addEventListener('keydown',e=>{if(e.key==='Enter')searchMods()});
+$('apply').addEventListener('click',()=>{
+ activeMc=$('mc').value;activeLoader=$('loader').value;chosen.clear();renderSelected();$('results').innerHTML='';
+ status('setupStatus',`Filter diterapkan: Minecraft ${activeMc} · Fabric Loader ${activeLoader}`,'ok');
+ status('searchStatus','Versi berubah. Cari ulang untuk melihat mod yang kompatibel.');
+});
+$('clear').addEventListener('click',()=>{chosen.clear();renderSelected();renderMods([]);status('searchStatus','Pilihan mod sudah dikosongkan.')});
+// Perbandingan versi sederhana untuk constraint Fabric Loader di fabric.mod.json.
+function versionParts(v){
+ const clean=String(v||'').trim().replace(/^v/i,'').split('+')[0].split('-')[0];
+ return clean.split('.').map(x=>Number.parseInt(x,10)||0);
+}
+function compareVersions(a,b){
+ const aa=versionParts(a),bb=versionParts(b);
+ for(let i=0;i<Math.max(aa.length,bb.length);i++){
+  const x=aa[i]||0,y=bb[i]||0;
+  if(x!==y)return x<y?-1:1;
+ }
+ return 0;
+}
+function oneConstraint(actual,part){
+ part=part.trim();
+ if(!part||part==='*')return true;
+ const match=part.match(/^(>=|<=|>|<|=|\^|~)?\s*(\d+(?:\.\d+){0,3}(?:-[0-9A-Za-z.-]+)?)$/);
+ if(!match)return true; // Jangan salah menolak format constraint yang belum dikenal.
+ const op=match[1]||'=';
+ const cmp=compareVersions(actual,match[2]);
+ if(op==='>=')return cmp>=0;
+ if(op==='>')return cmp>0;
+ if(op==='<=')return cmp<=0;
+ if(op==='<')return cmp<0;
+ if(op==='^')return cmp>=0 && versionParts(actual)[0]===versionParts(match[2])[0];
+ if(op==='~')return cmp>=0 && versionParts(actual)[0]===versionParts(match[2])[0] &&
+   (versionParts(actual)[1]||0)===(versionParts(match[2])[1]||0);
+ return cmp===0;
+}
+function matchesConstraint(actual,expr){
+ if(Array.isArray(expr))return expr.some(x=>matchesConstraint(actual,x));
+ if(typeof expr!=='string')return true;
+ return expr.split('||').some(group=>group.trim().split(/\s+/).filter(Boolean).every(part=>oneConstraint(actual,part)));
+}
+async function inspectFabricLoaderRequirement(blob){
+ const jar=await JSZip.loadAsync(blob);
+ const entry=jar.file('fabric.mod.json');
+ if(!entry)return {ok:false,reason:'fabric.mod.json tidak ditemukan; file ini tidak bisa divalidasi sebagai mod Fabric.'};
+ const meta=JSON.parse(await entry.async('string'));
+ const required=(meta.depends||{}).fabricloader;
+ const broken=(meta.breaks||{}).fabricloader;
+ if(required!==undefined&&!matchesConstraint(activeLoader,required)){
+  return {ok:false,reason:`membutuhkan Fabric Loader ${Array.isArray(required)?required.join(' atau '):required}, pilihanmu ${activeLoader}`};
+ }
+ if(broken!==undefined&&matchesConstraint(activeLoader,broken)){
+  return {ok:false,reason:`tidak kompatibel dengan Fabric Loader ${Array.isArray(broken)?broken.join(' atau '):broken}`};
+ }
+ return {ok:true};
+}
+$('download').addEventListener('click',async()=>{
+ if(!chosen.size)return;
+ if(typeof JSZip==='undefined'){status('downloadStatus','Library ZIP gagal dimuat. Periksa koneksi internet.','error');return}
+ const btn=$('download');btn.disabled=true;
+ const zip=new JSZip(), mods=zip.folder('mods');let done=0,failed=[],notes=[];
+ status('downloadStatus',`Memeriksa ${chosen.size} mod untuk Minecraft ${activeMc} + Fabric Loader ${activeLoader}...`);
+ for(const m of chosen.values()){
+  try{
+   const versions=await getJSON(`${API}/project/${encodeURIComponent(m.project_id)}/version?game_versions=${encodeURIComponent(JSON.stringify([activeMc]))}&loaders=${encodeURIComponent(JSON.stringify(['fabric']))}`);
+   if(!versions.length)throw new Error('Tidak ada versi Fabric untuk versi Minecraft ini');
+   // Coba rilis terbaru lebih dahulu. Jika syarat fabricloader tidak cocok,
+   // lanjutkan ke rilis lama sampai ditemukan file yang cocok.
+   let selected=null,lastReason='Tidak ditemukan rilis yang cocok';
+   for(const v of versions){
+    const file=(v.files||[]).find(f=>f.primary)||(v.files||[])[0];
+    if(!file)continue;
+    const response=await fetch(file.url);
+    if(!response.ok){lastReason=`Unduhan gagal (HTTP ${response.status})`;continue}
+    const blob=await response.blob();
+    const check=await inspectFabricLoaderRequirement(blob);
+    if(check.ok){selected={file,blob,version:v};break}
+    lastReason=check.reason;
+   }
+   if(!selected)throw new Error(`${lastReason}. Coba update Fabric Loader atau hapus mod ini.`);
+   mods.file(selected.file.filename,selected.blob);
+   done++;
+   if(selected.version!==versions[0])notes.push(`${m.title}: memakai versi mod ${selected.version.version_number} yang lebih lama agar cocok dengan Loader ${activeLoader}.`);
+   status('downloadStatus',`Mod cocok ${done}/${chosen.size}: ${m.title}`);
+  }catch(e){failed.push(`${m.title}: ${e.message}`)}
+ }
+ try{
+  if(!done)throw new Error('Tidak ada file mod yang lolos pemeriksaan Fabric Loader. Coba update loader atau kurangi pilihan mod.');
+  const blob=await zip.generateAsync({type:'blob'},meta=>status('downloadStatus',`Membuat ZIP... ${Math.round(meta.percent)}%`));
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='mods.zip';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+  let msg=`Selesai: ${done} mod yang lolos pemeriksaan masuk ke mods.zip.`;
+  if(notes.length)msg+=`\n\nVersi mod diturunkan agar cocok:\n- ${notes.join('\n- ')}`;
+  if(failed.length)msg+=`\n\nMod yang dilewati (${failed.length}):\n- ${failed.join('\n- ')}`;
+  status('downloadStatus',msg,failed.length?'':'ok');
+ }catch(e){status('downloadStatus',e.message,'error')}
+ finally{btn.disabled=chosen.size===0;btn.textContent=`Unduh mods.zip (${chosen.size})`}
+});
+init();
+</script>
+</body>
+</html>
